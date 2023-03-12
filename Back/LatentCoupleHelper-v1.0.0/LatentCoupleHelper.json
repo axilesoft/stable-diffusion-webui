@@ -1,0 +1,14 @@
+﻿{
+    "location":  "-1761, -225",
+    "size":  "355, 389",
+    "divX":  3,
+    "divY":  3,
+    "maxDivX":  32,
+    "maxDivY":  32,
+    "posX0":  1,
+    "posX1":  3,
+    "posY0":  1,
+    "posY1":  3,
+    "formOpacity":  0.5,
+    "transColor":  "#777777"
+}
