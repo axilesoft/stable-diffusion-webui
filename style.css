@@ -54,13 +54,6 @@ div.compact{
     gap: 1em;
 }
 
-.gradio-dropdown ul.options{
-    z-index: 3000;
-    min-width: fit-content;
-    max-width: inherit;
-    white-space: nowrap;
-}
-
 .gradio-dropdown label span:not(.has-info),
 .gradio-textbox label span:not(.has-info),
 .gradio-number label span:not(.has-info)
@@ -68,17 +61,23 @@ div.compact{
     margin-bottom: 0;
 }
 
-.gradio-dropdown ul.options {
-  max-height: 35em;
-  z-index: 3000;
+.gradio-dropdown ul.options{
+    z-index: 3000;
+    min-width: fit-content;
+    max-width: inherit;
+    white-space: nowrap;
 }
 
 .gradio-dropdown ul.options li.item {
-  padding: 0.05em 0;
+    padding: 0.05em 0;
 }
 
 .gradio-dropdown ul.options li.item.selected {
-  background-color: var(--secondary-500);
+    background-color: var(--neutral-100);
+}
+
+.dark .gradio-dropdown ul.options li.item.selected {
+    background-color: var(--neutral-900);
 }
 
 .gradio-dropdown div.wrap.wrap.wrap.wrap{
@@ -137,6 +136,18 @@ div.gradio-html.min{
     align-self: end;
     line-height: 1em;
     border-radius: 0.5em;
+}
+
+.gradio-button.secondary-down{
+    background: var(--button-secondary-background-fill);
+    color: var(--button-secondary-text-color);
+}
+.gradio-button.secondary-down, .gradio-button.secondary-down:hover{
+    box-shadow: 1px 1px 1px rgba(0,0,0,0.25) inset, 0px 0px 3px rgba(0,0,0,0.15) inset;
+}
+.gradio-button.secondary-down:hover{
+    background: var(--button-secondary-background-fill-hover);
+    color: var(--button-secondary-text-color-hover);
 }
 
 .checkboxes-row{
