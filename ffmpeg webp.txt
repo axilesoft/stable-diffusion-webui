@@ -1,0 +1,10 @@
+d:/tmp/ffmpeg/ffmpeg -i image%03d.png -c:v libwebp_anim -loop 0  out.webp
+d:/tmp/ffmpeg/ffmpeg -i image%03d.png -vf scale=320:-1 -c:v libwebp_anim -loop 0 out.webp
+
+
+ffmpeg -i Tree_%04d.png -vf palettegen=reserve_transparent=1 palette.png
+ffmpeg -framerate 30 -i Tree_%04d.png -i palette.png -lavfi paletteuse=alpha_threshold=128 -gifflags -offsetting treegif.gif
+
+
+d:/tmp/ffmpeg/ffmpeg -i image%03d.png -vf palettegen=reserve_transparent=1 palette.png
+d:/tmp/ffmpeg/ffmpeg -framerate 30 -i image%03d.png -i palette.png -lavfi paletteuse=alpha_threshold=128 -gifflags -offsetting treegif.gif

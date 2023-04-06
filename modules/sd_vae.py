@@ -105,7 +105,9 @@ def resolve_vae(checkpoint_file):
     vae_near_checkpoint = find_vae_near_checkpoint(checkpoint_file)
     if vae_near_checkpoint is not None and (shared.opts.sd_vae_as_default or is_automatic):
         return vae_near_checkpoint, 'found near the checkpoint'
-
+    if os.path.isfile(os.path.splitext(checkpoint_file)[0] + ".novae"):
+        return None, None
+    
     if shared.opts.sd_vae == "None":
         return None, None
 

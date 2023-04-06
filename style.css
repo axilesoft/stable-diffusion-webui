@@ -753,15 +753,15 @@ footer {
     word-break: break-all;
 }
 
-.extra-network-cards .card{
+.extra-network-cards .card {
+    font-size: xx-small;
     display: inline-block;
-    margin: 0.5em;
-    width: 16em;
-    height: 24em;
-    box-shadow: 0 0 5px rgba(128, 128, 128, 0.5);
+    margin: 0.2em;
+    width: 12em;
+    height: 18em;
+    box-shadow: 0 0 5px rgb(128 128 128 / 50%);
     border-radius: 0.2em;
     position: relative;
-
     background-size: auto 100%;
     background-position: center;
     overflow: hidden;
