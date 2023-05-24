@@ -98,7 +98,6 @@ def setup_model():
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
-    list_models()
     enable_midas_autodownload()
 
 
@@ -508,6 +507,11 @@ def load_model(checkpoint_info=None, already_loaded_state_dict=None):
     script_callbacks.model_loaded_callback(sd_model)
 
     timer.record("scripts callbacks")
+
+    with devices.autocast(), torch.no_grad():
+        sd_model.cond_stage_model_empty_prompt = sd_model.cond_stage_model([""])
+
+    timer.record("calculate empty prompt")
 
     print(f"Model loaded in {timer.summary()}.")
 

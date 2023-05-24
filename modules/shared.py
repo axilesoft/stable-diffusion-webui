@@ -15,6 +15,7 @@ import modules.devices as devices
 from modules import localization, script_loading, errors, ui_components, shared_items, cmd_args
 from modules.paths_internal import models_path, script_path, data_path, sd_configs_path, sd_default_config, sd_model_file, default_sd_model_file, extensions_dir, extensions_builtin_dir  # noqa: F401
 from ldm.models.diffusion.ddpm import LatentDiffusion
+from typing import Optional
 
 demo = None
 
@@ -113,7 +114,7 @@ class State:
     time_start = None
     server_start = None
     _server_command_signal = threading.Event()
-    _server_command: str | None = None
+    _server_command: Optional[str] = None
 
     @property
     def need_restart(self) -> bool:
@@ -131,14 +132,14 @@ class State:
         return self._server_command
 
     @server_command.setter
-    def server_command(self, value: str | None) -> None:
+    def server_command(self, value: Optional[str]) -> None:
         """
         Set the server command to `value` and signal that it's been set.
         """
         self._server_command = value
         self._server_command_signal.set()
 
-    def wait_for_server_command(self, timeout: float | None = None) -> str | None:
+    def wait_for_server_command(self, timeout: Optional[float] = None) -> Optional[str]:
         """
         Wait for server command to get set; return and clear the value and signal.
         """
@@ -417,10 +418,12 @@ options_templates.update(options_section(('sd', "Stable Diffusion"), {
 }))
 
 options_templates.update(options_section(('optimizations', "Optimizations"), {
+    "cross_attention_optimization": OptionInfo("Automatic", "Cross attention optimization", gr.Dropdown, lambda: {"choices": shared_items.cross_attention_optimizations()}),
     "s_min_uncond": OptionInfo(0, "Negative Guidance minimum sigma", gr.Slider, {"minimum": 0.0, "maximum": 4.0, "step": 0.01}).link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/9177").info("skip negative prompt for some steps when the image is almost ready; 0=disable, higher=faster"),
     "token_merging_ratio": OptionInfo(0.0, "Token merging ratio", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}).link("PR", "https://github.com/AUTOMATIC1111/stable-diffusion-webui/pull/9256").info("0=disable, higher=faster"),
     "token_merging_ratio_img2img": OptionInfo(0.0, "Token merging ratio for img2img", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}).info("only applies if non-zero and overrides above"),
     "token_merging_ratio_hr": OptionInfo(0.0, "Token merging ratio for high-res pass", gr.Slider, {"minimum": 0.0, "maximum": 0.9, "step": 0.1}).info("only applies if non-zero and overrides above"),
+    "pad_cond_uncond": OptionInfo(False, "Pad prompt/negative prompt to be same length").info("improves performance when prompt and negative prompt have different lengths; changes seeds"),
 }))
 
 options_templates.update(options_section(('compatibility', "Compatibility"), {
@@ -485,6 +488,7 @@ options_templates.update(options_section(('ui', "User interface"), {
     "ui_reorder": OptionInfo(", ".join(ui_reorder_categories), "txt2img/img2img UI item order").needs_restart(),
     "hires_fix_show_sampler": OptionInfo(False, "Hires fix: show hires sampler selection").needs_restart(),
     "hires_fix_show_prompts": OptionInfo(False, "Hires fix: show hires prompt and negative prompt").needs_restart(),
+    "disable_token_counters": OptionInfo(False, "Disable prompt token counters").needs_restart(),
 }))
 
 options_templates.update(options_section(('infotext', "Infotext"), {
