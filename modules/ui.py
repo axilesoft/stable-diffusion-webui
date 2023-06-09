@@ -1,3 +1,4 @@
+import datetime
 import json
 import mimetypes
 import os
@@ -11,7 +12,7 @@ import numpy as np
 from PIL import Image, PngImagePlugin  # noqa: F401
 from modules.call_queue import wrap_gradio_gpu_call, wrap_queued_call, wrap_gradio_call
 
-from modules import sd_hijack, sd_models, script_callbacks, ui_extensions, deepbooru, sd_vae, extra_networks, ui_common, ui_postprocessing, progress, ui_loadsave, errors, shared_items, ui_settings, timer
+from modules import sd_hijack, sd_models, script_callbacks, ui_extensions, deepbooru, sd_vae, extra_networks, ui_common, ui_postprocessing, progress, ui_loadsave, errors, shared_items, ui_settings, timer, sysinfo
 from modules.ui_components import FormRow, FormGroup, ToolButton, FormHTML
 from modules.paths import script_path
 from modules.ui_common import create_refresh_button
@@ -400,7 +401,7 @@ def create_override_settings_dropdown(tabname, row):
     dropdown = gr.Dropdown([], label="Override settings", visible=False, elem_id=f"{tabname}_override_settings", multiselect=True)
 
     dropdown.change(
-        fn=lambda x: gr.Dropdown.update(visible=len(x) > 0),
+        fn=lambda x: gr.Dropdown.update(visible=bool(x)),
         inputs=[dropdown],
         outputs=[dropdown],
     )
@@ -625,6 +626,7 @@ def create_ui():
                 (subseed_strength, "Variation seed strength"),
                 (seed_resize_from_w, "Seed resize from-1"),
                 (seed_resize_from_h, "Seed resize from-2"),
+                (txt2img_prompt_styles, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.update()),
                 (denoising_strength, "Denoising strength"),
                 (enable_hr, lambda d: "Denoising strength" in d),
                 (hr_options, lambda d: gr.Row.update(visible="Denoising strength" in d)),
@@ -1040,6 +1042,7 @@ def create_ui():
                 (subseed_strength, "Variation seed strength"),
                 (seed_resize_from_w, "Seed resize from-1"),
                 (seed_resize_from_h, "Seed resize from-2"),
+                (img2img_prompt_styles, lambda d: d["Styles array"] if isinstance(d.get("Styles array"), list) else gr.update()),
                 (denoising_strength, "Denoising strength"),
                 (mask_blur, "Mask blur"),
                 *modules.scripts.scripts_img2img.infotext_fields
@@ -1502,7 +1505,7 @@ def create_ui():
             gr.Audio(interactive=False, value=os.path.join(script_path, "notification.mp3"), elem_id="audio_notification", visible=False)
 
         footer = shared.html("footer.html")
-        footer = footer.format(versions=versions_html())
+        footer = footer.format(versions=versions_html(), api_docs="/docs" if shared.cmd_opts.api else "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API")
         gr.HTML(footer, elem_id="footer")
 
         settings.add_functionality(demo)
@@ -1602,3 +1605,15 @@ def setup_ui_api(app):
     app.add_api_route("/internal/ping", lambda: {}, methods=["GET"])
 
     app.add_api_route("/internal/profile-startup", lambda: timer.startup_record, methods=["GET"])
+
+    def download_sysinfo(attachment=False):
+        from fastapi.responses import PlainTextResponse
+
+        text = sysinfo.get()
+        filename = f"sysinfo-{datetime.datetime.utcnow().strftime('%Y-%m-%d-%H-%M')}.txt"
+
+        return PlainTextResponse(text, headers={'Content-Disposition': f'{"attachment" if attachment else "inline"}; filename="{filename}"'})
+
+    app.add_api_route("/internal/sysinfo", download_sysinfo, methods=["GET"])
+    app.add_api_route("/internal/sysinfo-download", lambda: download_sysinfo(attachment=True), methods=["GET"])
+

@@ -1,70 +1,125 @@
-// Main
-
-// Helper functions
-// Get active tab
-function getActiveTab(elements, all = false) {
-    const tabs = elements.img2imgTabs.querySelectorAll("button");
-
-    if (all) return tabs;
-
-    for (let tab of tabs) {
-        if (tab.classList.contains("selected")) {
-            return tab;
-        }
-    }
-}
-
-// Wait until opts loaded
-async function waitForOpts() {
-    return new Promise(resolve => {
-        const checkInterval = setInterval(() => {
-            if (window.opts && Object.keys(window.opts).length !== 0) {
-                clearInterval(checkInterval);
-                resolve(window.opts);
-            }
-        }, 100);
-    });
-}
-
-// Check is hotkey valid
-function isSingleLetter(value) {
-    return (
-        typeof value === "string" && value.length === 1 && /[a-z]/i.test(value)
-    );
-}
-
-// Create hotkeyConfig from opts
-function createHotkeyConfig(defaultHotkeysConfig, hotkeysConfigOpts) {
-    const result = {};
-    const usedKeys = new Set();
-
-    for (const key in defaultHotkeysConfig) {
-        if (typeof hotkeysConfigOpts[key] === "boolean") {
-            result[key] = hotkeysConfigOpts[key];
-            continue;
-        }
-        if (
-            hotkeysConfigOpts[key] &&
-            isSingleLetter(hotkeysConfigOpts[key]) &&
-            !usedKeys.has(hotkeysConfigOpts[key].toUpperCase())
-        ) {
-            // If the property passed the test and has not yet been used, add 'Key' before it and save it
-            result[key] = "Key" + hotkeysConfigOpts[key].toUpperCase();
-            usedKeys.add(hotkeysConfigOpts[key].toUpperCase());
-        } else {
-            // If the property does not pass the test or has already been used, we keep the default value
-            console.error(
-                `Hotkey: ${hotkeysConfigOpts[key]} for ${key} is repeated and conflicts with another hotkey or is not 1 letter. The default hotkey is used: ${defaultHotkeysConfig[key][3]}`
-            );
-            result[key] = defaultHotkeysConfig[key];
-        }
-    }
-
-    return result;
-}
-
-// Main
 onUiLoaded(async() => {
+    const elementIDs = {
+        img2imgTabs: "#mode_img2img .tab-nav",
+        inpaint: "#img2maskimg",
+        inpaintSketch: "#inpaint_sketch",
+        rangeGroup: "#img2img_column_size",
+        sketch: "#img2img_sketch",
+    };
+    const tabNameToElementId = {
+        "Inpaint sketch": elementIDs.inpaintSketch,
+        "Inpaint": elementIDs.inpaint,
+        "Sketch": elementIDs.sketch,
+    };
+
+    // Helper functions
+    // Get active tab
+    function getActiveTab(elements, all = false) {
+        const tabs = elements.img2imgTabs.querySelectorAll("button");
+
+        if (all) return tabs;
+
+        for (let tab of tabs) {
+            if (tab.classList.contains("selected")) {
+                return tab;
+            }
+        }
+    }
+
+    // Get tab ID
+    function getTabId(elements) {
+        const activeTab = getActiveTab(elements);
+        return tabNameToElementId[activeTab.innerText];
+    }
+
+    // Wait until opts loaded
+    async function waitForOpts() {
+        for (;;) {
+            if (window.opts && Object.keys(window.opts).length) {
+                return window.opts;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+
+    // Check is hotkey valid
+    function isSingleLetter(value) {
+        return (
+            typeof value === "string" && value.length === 1 && /[a-z]/i.test(value)
+        );
+    }
+
+    // Create hotkeyConfig from opts
+    function createHotkeyConfig(defaultHotkeysConfig, hotkeysConfigOpts) {
+        const result = {};
+        const usedKeys = new Set();
+
+        for (const key in defaultHotkeysConfig) {
+            if (typeof hotkeysConfigOpts[key] === "boolean") {
+                result[key] = hotkeysConfigOpts[key];
+                continue;
+            }
+            if (
+                hotkeysConfigOpts[key] &&
+                isSingleLetter(hotkeysConfigOpts[key]) &&
+                !usedKeys.has(hotkeysConfigOpts[key].toUpperCase())
+            ) {
+                // If the property passed the test and has not yet been used, add 'Key' before it and save it
+                result[key] = "Key" + hotkeysConfigOpts[key].toUpperCase();
+                usedKeys.add(hotkeysConfigOpts[key].toUpperCase());
+            } else {
+                // If the property does not pass the test or has already been used, we keep the default value
+                console.error(
+                    `Hotkey: ${hotkeysConfigOpts[key]} for ${key} is repeated and conflicts with another hotkey or is not 1 letter. The default hotkey is used: ${defaultHotkeysConfig[key][3]}`
+                );
+                result[key] = defaultHotkeysConfig[key];
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * The restoreImgRedMask function displays a red mask around an image to indicate the aspect ratio.
+     * If the image display property is set to 'none', the mask breaks. To fix this, the function
+     * temporarily sets the display property to 'block' and then hides the mask again after 300 milliseconds
+     * to avoid breaking the canvas. Additionally, the function adjusts the mask to work correctly on
+     * very long images.
+     */
+    function restoreImgRedMask(elements) {
+        const mainTabId = getTabId(elements);
+
+        if (!mainTabId) return;
+
+        const mainTab = gradioApp().querySelector(mainTabId);
+        const img = mainTab.querySelector("img");
+        const imageARPreview = gradioApp().querySelector("#imageARPreview");
+
+        if (!img || !imageARPreview) return;
+
+        imageARPreview.style.transform = "";
+        if (parseFloat(mainTab.style.width) > 865) {
+            const transformString = mainTab.style.transform;
+            const scaleMatch = transformString.match(/scale\(([-+]?[0-9]*\.?[0-9]+)\)/);
+            let zoom = 1; // default zoom
+
+            if (scaleMatch && scaleMatch[1]) {
+                zoom = Number(scaleMatch[1]);
+            }
+
+            imageARPreview.style.transformOrigin = "0 0";
+            imageARPreview.style.transform = `scale(${zoom})`;
+        }
+
+        if (img.style.display !== "none") return;
+
+        img.style.display = "block";
+
+        setTimeout(() => {
+            img.style.display = "none";
+        }, 400);
+    }
+
     const hotkeysConfigOpts = await waitForOpts();
 
     // Default config
@@ -84,28 +139,40 @@ onUiLoaded(async() => {
 
     let isMoving = false;
     let mouseX, mouseY;
+    let activeElement;
 
-    const elementIDs = {
-        sketch: "#img2img_sketch",
-        inpaint: "#img2maskimg",
-        inpaintSketch: "#inpaint_sketch",
-        img2imgTabs: "#mode_img2img .tab-nav"
-    };
+    const elements = Object.fromEntries(Object.keys(elementIDs).map((id) => [
+        id,
+        gradioApp().querySelector(elementIDs[id]),
+    ]));
+    const elemData = {};
 
-    async function getElements() {
-        const elements = await Promise.all(
-            Object.values(elementIDs).map(id => document.querySelector(id))
-        );
-        return Object.fromEntries(
-            Object.keys(elementIDs).map((key, index) => [key, elements[index]])
-        );
+    // Apply functionality to the range inputs. Restore redmask and correct for long images.
+    const rangeInputs = elements.rangeGroup ? Array.from(elements.rangeGroup.querySelectorAll("input")) :
+        [
+            gradioApp().querySelector("#img2img_width input[type='range']"),
+            gradioApp().querySelector("#img2img_height input[type='range']")
+        ];
+
+    for (const input of rangeInputs) {
+        input?.addEventListener("input", () => restoreImgRedMask(elements));
     }
 
-    const elements = await getElements();
+    function applyZoomAndPan(elemId) {
+        const targetElement = gradioApp().querySelector(elemId);
 
-    function applyZoomAndPan(targetElement, elemId) {
+        if (!targetElement) {
+            console.log("Element not found");
+            return;
+        }
+
         targetElement.style.transformOrigin = "0 0";
-        let [zoomLevel, panX, panY] = [1, 0, 0];
+
+        elemData[elemId] = {
+            zoom: 1,
+            panX: 0,
+            panY: 0
+        };
         let fullScreenMode = false;
 
         // Create tooltip
@@ -124,7 +191,7 @@ onUiLoaded(async() => {
             const tooltipContent = document.createElement("div");
             tooltipContent.className = "tooltip-content";
 
-            // Add info about hotkets
+            // Add info about hotkeys
             const zoomKey = hotkeysConfig.canvas_swap_controls ? "Ctrl" : "Shift";
             const adjustKey = hotkeysConfig.canvas_swap_controls ? "Shift" : "Ctrl";
 
@@ -132,30 +199,23 @@ onUiLoaded(async() => {
                 {key: `${zoomKey} + wheel`, action: "Zoom canvas"},
                 {key: `${adjustKey} + wheel`, action: "Adjust brush size"},
                 {
-                    key: hotkeysConfig.canvas_hotkey_reset.charAt(
-                        hotkeysConfig.canvas_hotkey_reset.length - 1
-                    ),
+                    key: hotkeysConfig.canvas_hotkey_reset.charAt(hotkeysConfig.canvas_hotkey_reset.length - 1),
                     action: "Reset zoom"
                 },
                 {
-                    key: hotkeysConfig.canvas_hotkey_fullscreen.charAt(
-                        hotkeysConfig.canvas_hotkey_fullscreen.length - 1
-                    ),
+                    key: hotkeysConfig.canvas_hotkey_fullscreen.charAt(hotkeysConfig.canvas_hotkey_fullscreen.length - 1),
                     action: "Fullscreen mode"
                 },
                 {
-                    key: hotkeysConfig.canvas_hotkey_move.charAt(
-                        hotkeysConfig.canvas_hotkey_move.length - 1
-                    ),
+                    key: hotkeysConfig.canvas_hotkey_move.charAt(hotkeysConfig.canvas_hotkey_move.length - 1),
                     action: "Move canvas"
                 }
             ];
-            hotkeys.forEach(function(hotkey) {
+            for (const hotkey of hotkeys) {
                 const p = document.createElement("p");
-                p.innerHTML =
-                    "<b>" + hotkey.key + "</b>" + " - " + hotkey.action;
+                p.innerHTML = `<b>${hotkey.key}</b> - ${hotkey.action}`;
                 tooltipContent.appendChild(p);
-            });
+            }
 
             // Add information and content elements to the tooltip element
             tooltip.appendChild(info);
@@ -186,12 +246,14 @@ onUiLoaded(async() => {
 
         // Reset the zoom level and pan position of the target element to their initial values
         function resetZoom() {
-            zoomLevel = 1;
-            panX = 0;
-            panY = 0;
+            elemData[elemId] = {
+                zoomLevel: 1,
+                panX: 0,
+                panY: 0
+            };
 
             fixCanvas();
-            targetElement.style.transform = `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`;
+            targetElement.style.transform = `scale(${elemData[elemId].zoomLevel}) translate(${elemData[elemId].panX}px, ${elemData[elemId].panY}px)`;
 
             const canvas = gradioApp().querySelector(
                 `${elemId} canvas[key="interface"]`
@@ -269,11 +331,14 @@ onUiLoaded(async() => {
         // Update the zoom level and pan position of the target element based on the values of the zoomLevel, panX and panY variables
         function updateZoom(newZoomLevel, mouseX, mouseY) {
             newZoomLevel = Math.max(0.5, Math.min(newZoomLevel, 15));
-            panX += mouseX - (mouseX * newZoomLevel) / zoomLevel;
-            panY += mouseY - (mouseY * newZoomLevel) / zoomLevel;
+
+            elemData[elemId].panX +=
+                mouseX - (mouseX * newZoomLevel) / elemData[elemId].zoomLevel;
+            elemData[elemId].panY +=
+                mouseY - (mouseY * newZoomLevel) / elemData[elemId].zoomLevel;
 
             targetElement.style.transformOrigin = "0 0";
-            targetElement.style.transform = `translate(${panX}px, ${panY}px) scale(${newZoomLevel})`;
+            targetElement.style.transform = `translate(${elemData[elemId].panX}px, ${elemData[elemId].panY}px) scale(${newZoomLevel})`;
 
             toggleOverlap("on");
             return newZoomLevel;
@@ -289,9 +354,9 @@ onUiLoaded(async() => {
 
                 let zoomPosX, zoomPosY;
                 let delta = 0.2;
-                if (zoomLevel > 7) {
+                if (elemData[elemId].zoomLevel > 7) {
                     delta = 0.9;
-                } else if (zoomLevel > 2) {
+                } else if (elemData[elemId].zoomLevel > 2) {
                     delta = 0.6;
                 }
 
@@ -299,8 +364,9 @@ onUiLoaded(async() => {
                 zoomPosY = e.clientY;
 
                 fullScreenMode = false;
-                zoomLevel = updateZoom(
-                    zoomLevel + (operation === "+" ? delta : -delta),
+                elemData[elemId].zoomLevel = updateZoom(
+                    elemData[elemId].zoomLevel +
+                        (operation === "+" ? delta : -delta),
                     zoomPosX - targetElement.getBoundingClientRect().left,
                     zoomPosY - targetElement.getBoundingClientRect().top
                 );
@@ -351,9 +417,9 @@ onUiLoaded(async() => {
             targetElement.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
 
             // Update global variables
-            zoomLevel = scale;
-            panX = offsetX;
-            panY = offsetY;
+            elemData[elemId].zoomLevel = scale;
+            elemData[elemId].panX = offsetX;
+            elemData[elemId].panY = offsetY;
 
             fullScreenMode = false;
             toggleOverlap("off");
@@ -427,9 +493,9 @@ onUiLoaded(async() => {
             targetElement.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
 
             // Update global variables
-            zoomLevel = scale;
-            panX = offsetX;
-            panY = offsetY;
+            elemData[elemId].zoomLevel = scale;
+            elemData[elemId].panX = offsetX;
+            elemData[elemId].panY = offsetY;
 
             fullScreenMode = true;
             toggleOverlap("on");
@@ -465,6 +531,8 @@ onUiLoaded(async() => {
             if (!isKeyDownHandlerAttached) {
                 document.addEventListener("keydown", handleKeyDown);
                 isKeyDownHandlerAttached = true;
+
+                activeElement = elemId;
             }
         }
 
@@ -472,6 +540,8 @@ onUiLoaded(async() => {
             if (isKeyDownHandlerAttached) {
                 document.removeEventListener("keydown", handleKeyDown);
                 isKeyDownHandlerAttached = false;
+
+                activeElement = null;
             }
         }
 
@@ -528,21 +598,24 @@ onUiLoaded(async() => {
 
         // Detect zoom level and update the pan speed.
         function updatePanPosition(movementX, movementY) {
-            let panSpeed = 1.5;
+            let panSpeed = 2;
 
-            if (zoomLevel > 8) {
-                panSpeed = 2.5;
+            if (elemData[elemId].zoomLevel > 8) {
+                panSpeed = 3.5;
             }
 
-            panX = panX + movementX * panSpeed;
-            panY = panY + movementY * panSpeed;
+            elemData[elemId].panX += movementX * panSpeed;
+            elemData[elemId].panY += movementY * panSpeed;
 
-            targetElement.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
-            toggleOverlap("on");
+            // Delayed redraw of an element
+            requestAnimationFrame(() => {
+                targetElement.style.transform = `translate(${elemData[elemId].panX}px, ${elemData[elemId].panY}px) scale(${elemData[elemId].zoomLevel})`;
+                toggleOverlap("on");
+            });
         }
 
         function handleMoveByKey(e) {
-            if (isMoving) {
+            if (isMoving && elemId === activeElement) {
                 updatePanPosition(e.movementX, e.movementY);
                 targetElement.style.pointerEvents = "none";
             } else {
@@ -558,7 +631,10 @@ onUiLoaded(async() => {
         gradioApp().addEventListener("mousemove", handleMoveByKey);
     }
 
-    applyZoomAndPan(elements.sketch, elementIDs.sketch);
-    applyZoomAndPan(elements.inpaint, elementIDs.inpaint);
-    applyZoomAndPan(elements.inpaintSketch, elementIDs.inpaintSketch);
+    applyZoomAndPan(elementIDs.sketch);
+    applyZoomAndPan(elementIDs.inpaint);
+    applyZoomAndPan(elementIDs.inpaintSketch);
+
+    // Make the function global so that other extensions can take advantage of this solution
+    window.applyZoomAndPan = applyZoomAndPan;
 });
