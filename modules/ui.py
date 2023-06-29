@@ -806,14 +806,18 @@ def create_ui():
                                         scale_by.release(**on_change_args)
                                         button_update_resize_to.click(**on_change_args)
 
-                                        # the code below is meant to update the resolution label after the image in the image selection UI has changed.
-                                        # as it is now the event keeps firing continuously for inpaint edits, which ruins the page with constant requests.
-                                        # I assume this must be a gradio bug and for now we'll just do it for non-inpaint inputs.
-                                        for component in [init_img, sketch]:
-                                            component.change(fn=lambda: None, _js="updateImg2imgResizeToTextAfterChangingImage", inputs=[], outputs=[], show_progress=False)
+                                with gr.Tabs():
+                                    with gr.Tab(label="Resize to", elem_id="img2img_tab_resize_to") as tab_scale_to:
+                                        with FormRow():
+                                            with gr.Column(elem_id="img2img_column_size", scale=4):
+                                                width = gr.Slider(minimum=64, maximum=2048, step=8, label="Width", value=512, elem_id="img2img_width")
+                                                height = gr.Slider(minimum=64, maximum=2048, step=8, label="Height", value=512, elem_id="img2img_height")
+                                            with gr.Column(elem_id="img2img_dimensions_row", scale=1, elem_classes="dimensions-tools"):
+                                                res_switch_btn = ToolButton(value=switch_values_symbol, elem_id="img2img_res_switch_btn")
+                                                detect_image_size_btn = ToolButton(value=detect_image_size_symbol, elem_id="img2img_detect_image_size_btn")
 
-                                tab_scale_to.select(fn=lambda: 0, inputs=[], outputs=[selected_scale_tab])
-                                tab_scale_by.select(fn=lambda: 1, inputs=[], outputs=[selected_scale_tab])
+                                    with gr.Tab(label="Resize by", elem_id="img2img_tab_resize_by") as tab_scale_by:
+                                        scale_by = gr.Slider(minimum=0.05, maximum=4.0, step=0.05, label="Scale", value=1.0, elem_id="img2img_scale")
 
                                 if opts.dimensions_and_batch_together:
                                     with gr.Column(elem_id="img2img_column_batch"):
