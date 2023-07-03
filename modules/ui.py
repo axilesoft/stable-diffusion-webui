@@ -501,13 +501,13 @@ def create_ui():
                         with FormRow(elem_id="txt2img_override_settings_row") as row:
                             override_settings = create_override_settings_dropdown('txt2img', row)
 
-                    elif category == "scripts":
-                        with FormGroup(elem_id="txt2img_script_container"):
-                            custom_inputs = modules.scripts.scripts_txt2img.setup_ui()
 
                     else:
                         modules.scripts.scripts_txt2img.setup_ui_for_section(category)
 
+            with FormGroup(elem_id="txt2img_script_container"):
+                custom_inputs = modules.scripts.scripts_txt2img.setup_ui()
+                
             hr_resolution_preview_inputs = [enable_hr, width, height, hr_scale, hr_resize_x, hr_resize_y]
 
             for component in hr_resolution_preview_inputs:
@@ -881,8 +881,8 @@ def create_ui():
                         else:
                             modules.scripts.scripts_img2img.setup_ui_for_section(category)
 
-                with FormGroup(elem_id="img2img_script_container"):
-                    custom_inputs = modules.scripts.scripts_img2img.setup_ui()
+            with FormGroup(elem_id="img2img_script_container"):
+                custom_inputs = modules.scripts.scripts_img2img.setup_ui()
 
             img2img_gallery, generation_info, html_info, html_log = create_output_panel("img2img", opts.outdir_img2img_samples)
 
