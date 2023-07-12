@@ -13,44 +13,6 @@ import modules.images
 from modules.ui_components import ToolButton
 
 
-from PIL import Image 
-
-def my_save_gif(input_file,output_file):
-    input_image = Image.open(input_file)
-
-    # Create a new sequence to store the frames
-    frames = []
-
-    # Split the input image into frames while preserving transparency
-    for y in range(2):
-        for x in range(3):
-            # Define the coordinates for the current frame
-            left = x * input_image.width // 3
-            upper = y * input_image.height // 2
-            right = left + input_image.width // 3
-            lower = upper + input_image.height // 2
-
-            # Crop the input image to extract the frame
-            frame = input_image.crop((left, upper, right, lower))
-
-            # Create a new image with transparency support
-            frame_with_transparency = Image.new('RGBA', frame.size)
-            
-            if frame.mode == 'RGBA':
-                # If the frame already has an alpha channel, paste it directly
-                frame_with_transparency.paste(frame, (0, 0), mask=frame)
-                frame_with_transparency.info['disposal'] = 2
-            else:
-                # If the frame is an RGB image, create an alpha channel mask
-                frame_with_transparency.paste(frame)
-
-            # Append the frame to the list
-            frames.append(frame_with_transparency)
-
-    # Save the frames as a GIF file
-    frames[0].save(output_file, format='GIF', append_images=frames[1:], save_all=True, duration=70, loop=0)
-
-
 folder_symbol = '\U0001f4c2'  # 📂
 refresh_symbol = '\U0001f504'  # 🔄
 
@@ -126,21 +88,16 @@ def save_files(js_data, images, do_make_zip, index):
 
     # Make Zip
     if do_make_zip:
- 
-        # zip_fileseed = p.all_seeds[index-1] if only_one else p.all_seeds[0]
-        # namegen = modules.images.FilenameGenerator(p, zip_fileseed, p.all_prompts[0], image, True)
-        # zip_filename = namegen.apply(shared.opts.grid_zip_filename_pattern or "[datetime]_[[model_name]]_[seed]-[seed_last]")
-        # zip_filepath = os.path.join(path, f"{zip_filename}.zip")
+        zip_fileseed = p.all_seeds[index-1] if only_one else p.all_seeds[0]
+        namegen = modules.images.FilenameGenerator(p, zip_fileseed, p.all_prompts[0], image, True)
+        zip_filename = namegen.apply(shared.opts.grid_zip_filename_pattern or "[datetime]_[[model_name]]_[seed]-[seed_last]")
+        zip_filepath = os.path.join(path, f"{zip_filename}.zip")
 
-        # from zipfile import ZipFile
-        # with ZipFile(zip_filepath, "w") as zip_file:
-        #     for i in range(len(fullfns)):
-        #         with open(fullfns[i], mode="rb") as f:
-        #             zip_file.writestr(filenames[i], f.read())
- 
-        zip_filepath = "r:/sdout.gif"
-        my_save_gif(fullfns[0],zip_filepath)
- 
+        from zipfile import ZipFile
+        with ZipFile(zip_filepath, "w") as zip_file:
+            for i in range(len(fullfns)):
+                with open(fullfns[i], mode="rb") as f:
+                    zip_file.writestr(filenames[i], f.read())
         fullfns.insert(0, zip_filepath)
 
     return gr.File.update(value=fullfns, visible=True), plaintext_to_html(f"Saved: {filenames[0]}")
@@ -174,7 +131,7 @@ Requested path was: {f}
             else:
                 sp.Popen(["xdg-open", path])
 
-    with gr.Column(variant='panel', elem_id=f"{tabname}_results",scale=0.5):
+    with gr.Column(variant='panel', elem_id=f"{tabname}_results"):
         with gr.Group(elem_id=f"{tabname}_gallery_container"):
             result_gallery = gr.Gallery(label='Output', show_label=False, elem_id=f"{tabname}_gallery").style(columns=4)
 
@@ -281,4 +238,3 @@ def create_refresh_button(refresh_component, refresh_method, refreshed_args, ele
         outputs=[refresh_component]
     )
     return refresh_button
-
