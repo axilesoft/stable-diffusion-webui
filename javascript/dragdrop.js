@@ -90,6 +90,14 @@ window.document.addEventListener('drop', e => {
         if (fileInput) {
             fileInput.files = files;
             fileInput.dispatchEvent(new Event('change'));
+
+            if (get_tab_index('tabs') == 0)
+            setTimeout(function () {
+                gradioApp().getElementById("paste").click();                 
+                setTimeout(function () {                     
+                    gradioApp().getElementById("txt2img_generate").click();
+                  }, 300);
+              }, 300);
         }
     }
 
