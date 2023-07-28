@@ -194,7 +194,7 @@ def run_extension_installer(extension_dir):
 
     try:
         env = os.environ.copy()
-        env['PYTHONPATH'] = f"{os.path.abspath('.')}{os.pathsep}{env['PYTHONPATH']}"
+        env['PYTHONPATH'] = f"{os.path.abspath('.')}{os.pathsep}{env.get('PYTHONPATH', '')}"
 
         print(run(f'"{python}" "{path_installer}"', errdesc=f"Error running install.py for extension {extension_dir}", custom_env=env))
     except Exception as e:
@@ -226,8 +226,11 @@ def run_extensions_installers(settings_file):
 
     with startup_timer.subcategory("run extensions installers"):
         for dirname_extension in list_extensions(settings_file):
-            run_extension_installer(os.path.join(extensions_dir, dirname_extension))
-            startup_timer.record(dirname_extension)
+            path = os.path.join(extensions_dir, dirname_extension)
+
+            if os.path.isdir(path):
+                run_extension_installer(path)
+                startup_timer.record(dirname_extension)
 
 
 re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
