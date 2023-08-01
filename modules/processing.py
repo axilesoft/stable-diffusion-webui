@@ -615,7 +615,7 @@ def create_infotext(p, all_prompts, all_seeds, all_subseeds, comments=None, iter
     uses_ensd = opts.eta_noise_seed_delta != 0
     if uses_ensd:
         uses_ensd = sd_samplers_common.is_sampler_using_eta_noise_seed_delta(p)
-
+    if len(p.all_seeds)<=index: return ""
     generation_params = {
         "Steps": p.steps,
         "Sampler": p.sampler_name,
