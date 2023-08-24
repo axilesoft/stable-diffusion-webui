@@ -12,8 +12,22 @@ onUiLoaded(async() => {
         "Sketch": elementIDs.sketch
     };
 
+
     // Helper functions
     // Get active tab
+
+    /**
+     * Waits for an element to be present in the DOM.
+     */
+    const waitForElement = (id) => new Promise(resolve => {
+        const checkForElement = () => {
+            const element = document.querySelector(id);
+            if (element) return resolve(element);
+            setTimeout(checkForElement, 100);
+        };
+        checkForElement();
+    });
+
     function getActiveTab(elements, all = false) {
         const tabs = elements.img2imgTabs.querySelectorAll("button");
 
@@ -40,6 +54,11 @@ onUiLoaded(async() => {
             }
             await new Promise(resolve => setTimeout(resolve, 100));
         }
+    }
+
+    // Detect whether the element has a horizontal scroll bar
+    function hasHorizontalScrollbar(element) {
+        return element.scrollWidth > element.clientWidth;
     }
 
     // Function for defining the "Ctrl", "Shift" and "Alt" keys
@@ -201,7 +220,8 @@ onUiLoaded(async() => {
         canvas_hotkey_overlap: "KeyO",
         canvas_disabled_functions: [],
         canvas_show_tooltip: true,
-        canvas_blur_prompt: false
+        canvas_auto_expand: true,
+        canvas_blur_prompt: false,
     };
 
     const functionMap = {
@@ -371,6 +391,11 @@ onUiLoaded(async() => {
             toggleOverlap("off");
             fullScreenMode = false;
 
+            const closeBtn = targetElement.querySelector("button[aria-label='Remove Image']");
+            if (closeBtn) {
+                closeBtn.addEventListener("click", resetZoom);
+            }
+
             if (
                 canvas &&
                 parseFloat(canvas.style.width) > 865 &&
@@ -381,9 +406,6 @@ onUiLoaded(async() => {
             }
 
             targetElement.style.width = "";
-            if (canvas) {
-                targetElement.style.height = canvas.style.height;
-            }
         }
 
         // Toggle the zIndex of the target element between two values, allowing it to overlap or be overlapped by other elements
@@ -546,7 +568,7 @@ onUiLoaded(async() => {
             if (!canvas) return;
 
             if (canvas.offsetWidth > 862) {
-                targetElement.style.width = canvas.offsetWidth + "px";
+                targetElement.style.width = (canvas.offsetWidth + 2) + "px";
             }
 
             if (fullScreenMode) {
@@ -648,7 +670,49 @@ onUiLoaded(async() => {
             mouseY = e.offsetY;
         }
 
+        // Simulation of the function to put a long image into the screen.
+        // We detect if an image has a scroll bar or not, make a fullscreen to reveal the image, then reduce it to fit into the element.
+        // We hide the image and show it to the user when it is ready.
+
+        targetElement.isExpanded = false;
+        function autoExpand() {
+            const canvas = document.querySelector(`${elemId} canvas[key="interface"]`);
+            const isMainTab = activeElement === elementIDs.inpaint || activeElement === elementIDs.inpaintSketch || activeElement === elementIDs.sketch;
+
+            if (canvas && isMainTab) {
+                if (hasHorizontalScrollbar(targetElement) && targetElement.isExpanded === false) {
+                    targetElement.style.visibility = "hidden";
+                    setTimeout(() => {
+                        fitToScreen();
+                        resetZoom();
+                        targetElement.style.visibility = "visible";
+                        targetElement.isExpanded = true;
+                    }, 10);
+                }
+            }
+        }
+
         targetElement.addEventListener("mousemove", getMousePosition);
+
+        //observers
+        // Creating an observer with a callback function to handle DOM changes
+        const observer = new MutationObserver((mutationsList, observer) => {
+            for (let mutation of mutationsList) {
+                // If the style attribute of the canvas has changed, by observation it happens only when the picture changes
+                if (mutation.type === 'attributes' && mutation.attributeName === 'style' &&
+                    mutation.target.tagName.toLowerCase() === 'canvas') {
+                    targetElement.isExpanded = false;
+                    setTimeout(resetZoom, 10);
+                }
+            }
+        });
+
+        // Apply auto expand if enabled
+        if (hotkeysConfig.canvas_auto_expand) {
+            targetElement.addEventListener("mousemove", autoExpand);
+            // Set up an observer to track attribute changes
+            observer.observe(targetElement, {attributes: true, childList: true, subtree: true});
+        }
 
         // Handle events only inside the targetElement
         let isKeyDownHandlerAttached = false;
@@ -772,5 +836,52 @@ onUiLoaded(async() => {
     applyZoomAndPan(elementIDs.inpaintSketch);
 
     // Make the function global so that other extensions can take advantage of this solution
-    window.applyZoomAndPan = applyZoomAndPan;
+    const applyZoomAndPanIntegration = async(id, elementIDs) => {
+        const mainEl = document.querySelector(id);
+        if (id.toLocaleLowerCase() === "none") {
+            for (const elementID of elementIDs) {
+                const el = await waitForElement(elementID);
+                if (!el) break;
+                applyZoomAndPan(elementID);
+            }
+            return;
+        }
+
+        if (!mainEl) return;
+        mainEl.addEventListener("click", async() => {
+            for (const elementID of elementIDs) {
+                const el = await waitForElement(elementID);
+                if (!el) break;
+                applyZoomAndPan(elementID);
+            }
+        }, {once: true});
+    };
+
+    window.applyZoomAndPan = applyZoomAndPan; // Only 1 elements, argument elementID, for example applyZoomAndPan("#txt2img_controlnet_ControlNet_input_image")
+
+    window.applyZoomAndPanIntegration = applyZoomAndPanIntegration; // for any extension
+
+    /*
+        The function `applyZoomAndPanIntegration` takes two arguments:
+
+        1. `id`: A string identifier for the element to which zoom and pan functionality will be applied on click.
+        If the `id` value is "none", the functionality will be applied to all elements specified in the second argument without a click event.
+
+        2. `elementIDs`: An array of string identifiers for elements. Zoom and pan functionality will be applied to each of these elements on click of the element specified by the first argument.
+        If "none" is specified in the first argument, the functionality will be applied to each of these elements without a click event.
+
+        Example usage:
+        applyZoomAndPanIntegration("#txt2img_controlnet", ["#txt2img_controlnet_ControlNet_input_image"]);
+        In this example, zoom and pan functionality will be applied to the element with the identifier "txt2img_controlnet_ControlNet_input_image" upon clicking the element with the identifier "txt2img_controlnet".
+    */
+
+    // More examples
+    // Add integration with ControlNet txt2img One TAB
+    // applyZoomAndPanIntegration("#txt2img_controlnet", ["#txt2img_controlnet_ControlNet_input_image"]);
+
+    // Add integration with ControlNet txt2img Tabs
+    // applyZoomAndPanIntegration("#txt2img_controlnet",Array.from({ length: 10 }, (_, i) => `#txt2img_controlnet_ControlNet-${i}_input_image`));
+
+    // Add integration with Inpaint Anything
+    // applyZoomAndPanIntegration("None", ["#ia_sam_image", "#ia_sel_mask"]);
 });

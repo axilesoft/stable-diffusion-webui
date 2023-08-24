@@ -2,7 +2,6 @@ import torch
 from torch.nn.functional import silu
 from types import MethodType
 
-import modules.textual_inversion.textual_inversion
 from modules import devices, sd_hijack_optimizations, shared, script_callbacks, errors, sd_unet
 from modules.hypernetworks import hypernetwork
 from modules.shared import cmd_opts
@@ -30,8 +29,10 @@ ldm.modules.attention.MemoryEfficientCrossAttention = ldm.modules.attention.Cros
 ldm.modules.attention.BasicTransformerBlock.ATTENTION_MODES["softmax-xformers"] = ldm.modules.attention.CrossAttention
 
 # silence new console spam from SD2
-ldm.modules.attention.print = lambda *args: None
-ldm.modules.diffusionmodules.model.print = lambda *args: None
+ldm.modules.attention.print = shared.ldm_print
+ldm.modules.diffusionmodules.model.print = shared.ldm_print
+ldm.util.print = shared.ldm_print
+ldm.models.diffusion.ddpm.print = shared.ldm_print
 
 optimizers = []
 current_optimizer: sd_hijack_optimizations.SdOptimization = None
@@ -164,12 +165,13 @@ class StableDiffusionModelHijack:
     clip = None
     optimization_method = None
 
-    embedding_db = modules.textual_inversion.textual_inversion.EmbeddingDatabase()
-
     def __init__(self):
+        import modules.textual_inversion.textual_inversion
+
         self.extra_generation_params = {}
         self.comments = []
 
+        self.embedding_db = modules.textual_inversion.textual_inversion.EmbeddingDatabase()
         self.embedding_db.add_embedding_dir(cmd_opts.embeddings_dir)
 
     def apply_optimizations(self, option=None):
@@ -243,7 +245,21 @@ class StableDiffusionModelHijack:
         ldm.modules.diffusionmodules.openaimodel.UNetModel.forward = sd_unet.UNetModel_forward
 
     def undo_hijack(self, m):
-        if type(m.cond_stage_model) == sd_hijack_xlmr.FrozenXLMREmbedderWithCustomWords:
+        conditioner = getattr(m, 'conditioner', None)
+        if conditioner:
+            for i in range(len(conditioner.embedders)):
+                embedder = conditioner.embedders[i]
+                if isinstance(embedder, (sd_hijack_open_clip.FrozenOpenCLIPEmbedderWithCustomWords, sd_hijack_open_clip.FrozenOpenCLIPEmbedder2WithCustomWords)):
+                    embedder.wrapped.model.token_embedding = embedder.wrapped.model.token_embedding.wrapped
+                    conditioner.embedders[i] = embedder.wrapped
+                if isinstance(embedder, sd_hijack_clip.FrozenCLIPEmbedderForSDXLWithCustomWords):
+                    embedder.wrapped.transformer.text_model.embeddings.token_embedding = embedder.wrapped.transformer.text_model.embeddings.token_embedding.wrapped
+                    conditioner.embedders[i] = embedder.wrapped
+
+            if hasattr(m, 'cond_stage_model'):
+                delattr(m, 'cond_stage_model')
+
+        elif type(m.cond_stage_model) == sd_hijack_xlmr.FrozenXLMREmbedderWithCustomWords:
             m.cond_stage_model = m.cond_stage_model.wrapped
 
         elif type(m.cond_stage_model) == sd_hijack_clip.FrozenCLIPEmbedderWithCustomWords:
