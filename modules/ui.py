@@ -723,6 +723,9 @@ def create_ui():
                         with FormRow(elem_id="img2img_override_settings_row") as row:
                             override_settings = create_override_settings_dropdown('img2img', row)
 
+                    elif category == "scripts":
+                        with FormGroup(elem_id="img2img_script_container"):
+                            custom_inputs = scripts.scripts_img2img.setup_ui()
 
                     elif category == "inpaint":
                         with FormGroup(elem_id="inpaint_controls", visible=False) as inpaint_controls:
@@ -755,9 +758,6 @@ def create_ui():
 
                     if category not in {"accordions"}:
                         scripts.scripts_img2img.setup_ui_for_section(category)
-
-            with FormGroup(elem_id="img2img_script_container"):
-                    custom_inputs = scripts.scripts_img2img.setup_ui()
 
             img2img_gallery, generation_info, html_info, html_log = create_output_panel("img2img", opts.outdir_img2img_samples)
 
@@ -1363,3 +1363,4 @@ def setup_ui_api(app):
 
     app.add_api_route("/internal/sysinfo", download_sysinfo, methods=["GET"])
     app.add_api_route("/internal/sysinfo-download", lambda: download_sysinfo(attachment=True), methods=["GET"])
+
