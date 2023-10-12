@@ -127,7 +127,7 @@ window.addEventListener('paste', e => {
     }
 
     const firstFreeImageField = visibleImageFields
-        .filter(el => el.querySelector('input[type=file]'))?.[0];
+        .filter(el => !el.querySelector('img'))?.[0];
 
     dropReplaceImage(
         firstFreeImageField ?
