@@ -3,14 +3,14 @@ import os.path
 import urllib.parse
 from pathlib import Path
 
-from modules import shared, ui_extra_networks_user_metadata, errors, extra_networks
+from modules import shared, ui_extra_networks_user_metadata, errors, extra_networks, util
 from modules.images import read_info_from_image, save_image_with_geninfo
 import gradio as gr
 import json
 import html
 from fastapi.exceptions import HTTPException
 
-from modules.generation_parameters_copypaste import image_from_url_text
+from modules.infotext_utils import image_from_url_text
 from modules.ui_components import ToolButton
 
 extra_pages = []
@@ -103,16 +103,18 @@ class ExtraNetworksPage:
         self.name = title.lower()
         self.id_page = self.name.replace(" ", "_")
         self.card_page = shared.html("extra-networks-card.html")
+        self.allow_prompt = True
         self.allow_negative_prompt = False
         self.metadata = {}
         self.items = {}
+        self.lister = util.MassFileLister()
 
     def refresh(self):
         pass
 
     def read_user_metadata(self, item):
         filename = item.get("filename", None)
-        metadata = extra_networks.get_user_metadata(filename)
+        metadata = extra_networks.get_user_metadata(filename, lister=self.lister)
 
         desc = metadata.get("description", None)
         if desc is not None:
@@ -122,7 +124,7 @@ class ExtraNetworksPage:
 
     def link_preview(self, filename):
         quoted_filename = urllib.parse.quote(filename.replace('\\', '/'))
-        mtime = os.path.getmtime(filename)
+        mtime, _ = self.lister.mctime(filename)
         return f"./sd_extra_networks/thumb?filename={quoted_filename}&mtime={mtime}"
 
     def search_terms_from_path(self, filename, possible_directories=None):
@@ -136,6 +138,8 @@ class ExtraNetworksPage:
         return ""
 
     def create_html(self, tabname):
+        self.lister.reset()
+
         items_html = ''
 
         self.metadata = {}
@@ -150,8 +154,13 @@ class ExtraNetworksPage:
                         continue
 
                     subdir = os.path.abspath(x)[len(parentdir):].replace("\\", "/")
-                    while subdir.startswith("/"):
-                        subdir = subdir[1:]
+
+                    if shared.opts.extra_networks_dir_button_function:
+                        if not subdir.startswith("/"):
+                            subdir = "/" + subdir
+                    else:
+                        while subdir.startswith("/"):
+                            subdir = subdir[1:]
 
                     is_empty = len(os.listdir(x)) == 0
                     if not is_empty and not subdir.endswith("/"):
@@ -217,7 +226,10 @@ class ExtraNetworksPage:
 
         onclick = item.get("onclick", None)
         if onclick is None:
-            onclick = '"' + html.escape(f"""return cardClicked({quote_js(tabname)}, {item["prompt"]}, {"true" if self.allow_negative_prompt else "false"})""") + '"'
+            if "negative_prompt" in item:
+                onclick = '"' + html.escape(f"""return cardClicked({quote_js(tabname)}, {item["prompt"]}, {item["negative_prompt"]}, {"true" if self.allow_negative_prompt else "false"})""") + '"'
+            else:
+                onclick = '"' + html.escape(f"""return cardClicked({quote_js(tabname)}, {item["prompt"]}, {'""'}, {"true" if self.allow_negative_prompt else "false"})""") + '"'
 
         height = f"height: {shared.opts.extra_networks_card_height}px;" if shared.opts.extra_networks_card_height else ''
         width = f"width: {shared.opts.extra_networks_card_width}px;" if shared.opts.extra_networks_card_width else ''
@@ -273,11 +285,12 @@ class ExtraNetworksPage:
         List of default keys used for sorting in the UI.
         """
         pth = Path(path)
-        stat = pth.stat()
+        mtime, ctime = self.lister.mctime(path)
         return {
-            "date_created": int(stat.st_ctime or 0),
-            "date_modified": int(stat.st_mtime or 0),
+            "date_created": int(mtime),
+            "date_modified": int(ctime),
             "name": pth.name.lower(),
+            "path": str(pth.parent).lower(),
         }
 
     def find_preview(self, path):
@@ -288,7 +301,7 @@ class ExtraNetworksPage:
         potential_files = sum([[path + "." + ext, path + ".preview." + ext] for ext in allowed_preview_extensions()], [])
 
         for file in potential_files:
-            if os.path.isfile(file):
+            if self.lister.exists(file):
                 return self.link_preview(file)
 
         return None
@@ -298,6 +311,9 @@ class ExtraNetworksPage:
         Find and read a description file for a given path (without extension).
         """
         for file in [f"{path}.txt", f"{path}.description.txt"]:
+            if not self.lister.exists(file):
+                continue
+
             try:
                 with open(file, "r", encoding="utf-8", errors="replace") as f:
                     return f.read()
@@ -367,7 +383,10 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
     related_tabs = []
 
     for page in ui.stored_extra_pages:
-        with gr.Tab(page.title, id=page.id_page) as tab:
+        with gr.Tab(page.title, elem_id=f"{tabname}_{page.id_page}", elem_classes=["extra-page"]) as tab:
+            with gr.Column(elem_id=f"{tabname}_{page.id_page}_prompts", elem_classes=["extra-page-prompts"]):
+                pass
+
             elem_id = f"{tabname}_{page.id_page}_cards_html"
             page_elem = gr.HTML('Loading...', elem_id=elem_id)
             ui.pages.append(page_elem)
@@ -381,35 +400,44 @@ def create_ui(interface: gr.Blocks, unrelated_tabs, tabname):
             related_tabs.append(tab)
 
     edit_search = gr.Textbox('', show_label=False, elem_id=tabname+"_extra_search", elem_classes="search", placeholder="Search...", visible=False, interactive=True)
-    dropdown_sort = gr.Dropdown(choices=['Default Sort', 'Date Created', 'Date Modified', 'Name'], value='Default Sort', elem_id=tabname+"_extra_sort", elem_classes="sort", multiselect=False, visible=False, show_label=False, interactive=True, label=tabname+"_extra_sort_order")
-    button_sortorder = ToolButton(switch_values_symbol, elem_id=tabname+"_extra_sortorder", elem_classes="sortorder", visible=False, tooltip="Invert sort order")
+    dropdown_sort = gr.Dropdown(choices=['Path', 'Name', 'Date Created', 'Date Modified', ], value=shared.opts.extra_networks_card_order_field, elem_id=tabname+"_extra_sort", elem_classes="sort", multiselect=False, visible=False, show_label=False, interactive=True, label=tabname+"_extra_sort_order")
+    button_sortorder = ToolButton(switch_values_symbol, elem_id=tabname+"_extra_sortorder", elem_classes=["sortorder"] + ([] if shared.opts.extra_networks_card_order == "Ascending" else ["sortReverse"]), visible=False, tooltip="Invert sort order")
     button_refresh = gr.Button('Refresh', elem_id=tabname+"_extra_refresh", visible=False)
     checkbox_show_dirs = gr.Checkbox(True, label='Show dirs', elem_id=tabname+"_extra_show_dirs", elem_classes="show-dirs", visible=False)
 
     ui.button_save_preview = gr.Button('Save preview', elem_id=tabname+"_save_preview", visible=False)
     ui.preview_target_filename = gr.Textbox('Preview save filename', elem_id=tabname+"_preview_filename", visible=False)
 
-    for tab in unrelated_tabs:
-        tab.select(fn=lambda: [gr.update(visible=False) for _ in range(5)], inputs=[], outputs=[edit_search, dropdown_sort, button_sortorder, button_refresh, checkbox_show_dirs], show_progress=False)
+    tab_controls = [edit_search, dropdown_sort, button_sortorder, button_refresh, checkbox_show_dirs]
 
-    for tab in related_tabs:
-        tab.select(fn=lambda: [gr.update(visible=True) for _ in range(5)], inputs=[], outputs=[edit_search, dropdown_sort, button_sortorder, button_refresh, checkbox_show_dirs], show_progress=False)
+    for tab in unrelated_tabs:
+        tab.select(fn=lambda: [gr.update(visible=False) for _ in tab_controls], _js='function(){ extraNetworksUrelatedTabSelected("' + tabname + '"); }', inputs=[], outputs=tab_controls, show_progress=False)
+
+    for page, tab in zip(ui.stored_extra_pages, related_tabs):
+        allow_prompt = "true" if page.allow_prompt else "false"
+        allow_negative_prompt = "true" if page.allow_negative_prompt else "false"
+
+        jscode = 'extraNetworksTabSelected("' + tabname + '", "' + f"{tabname}_{page.id_page}_prompts" + '", ' + allow_prompt + ', ' + allow_negative_prompt + ');'
+
+        tab.select(fn=lambda: [gr.update(visible=True) for _ in tab_controls],  _js='function(){ ' + jscode + ' }', inputs=[], outputs=tab_controls, show_progress=False)
+
+    dropdown_sort.change(fn=lambda: None, _js="function(){ applyExtraNetworkSort('" + tabname + "'); }")
+
+    def create_html():
+        ui.pages_contents = [pg.create_html(ui.tabname) for pg in ui.stored_extra_pages]
 
     def pages_html():
         if not ui.pages_contents:
-            return refresh()
-
+            create_html()
         return ui.pages_contents
 
     def refresh():
         for pg in ui.stored_extra_pages:
             pg.refresh()
-
-        ui.pages_contents = [pg.create_html(ui.tabname) for pg in ui.stored_extra_pages]
-
+        create_html()
         return ui.pages_contents
 
-    interface.load(fn=pages_html, inputs=[], outputs=[*ui.pages])
+    interface.load(fn=pages_html, inputs=[], outputs=ui.pages)
     button_refresh.click(fn=refresh, inputs=[], outputs=ui.pages)
 
     return ui
